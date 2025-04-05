@@ -1,3 +1,5 @@
+// blockchain.js
+
 const crypto = require('crypto');
 
 class Block {
@@ -22,7 +24,7 @@ class Blockchain {
     }
 
     createGenesisBlock() {
-        return new Block(0, Date.now(), "Genesis Block", "0");
+        return new Block(0, Date.now(), 'Genesis Block', '0');
     }
 
     getLatestBlock() {
@@ -30,24 +32,22 @@ class Blockchain {
     }
 
     isDuplicateData(data) {
-        return this.chain.some(block => {
-            if (typeof block.data === 'object' && block.data.plotId) {
-                return block.data.plotId === data.plotId;
-            }
-            return false;
-        });
+        if (!data || typeof data !== 'object') return false;
+        return this.chain.some(block => 
+            block.data && typeof block.data === 'object' && block.data.plotId === data.plotId
+        );
     }
 
     addBlock(newBlock) {
         if (this.isDuplicateData(newBlock.data)) {
-            console.log('❌ Block not added due to duplicate data!');
-            return false; // <-- better to return a value
+            console.log('❌ Duplicate plotId detected! Block rejected.');
+            return false;
         }
 
         newBlock.previousHash = this.getLatestBlock().hash;
         newBlock.hash = newBlock.calculateHash();
         this.chain.push(newBlock);
-        console.log('✅ Block added successfully.');
+        console.log('✅ Block added to chain.');
         return true;
     }
 
@@ -57,17 +57,22 @@ class Blockchain {
             const previousBlock = this.chain[i - 1];
 
             if (currentBlock.hash !== currentBlock.calculateHash()) {
-                console.log(`❌ Block ${i} has invalid hash!`);
+                console.error(`❌ Invalid hash at block ${i}!`);
                 return false;
             }
 
             if (currentBlock.previousHash !== previousBlock.hash) {
-                console.log(`❌ Block ${i} has invalid previous hash link!`);
+                console.error(`❌ Invalid previousHash link at block ${i}!`);
                 return false;
             }
         }
-        console.log('✅ Blockchain is valid!');
+        console.log('✅ Blockchain integrity verified.');
         return true;
+    }
+
+    // Optional: Pretty-print the chain
+    printChain() {
+        console.log(JSON.stringify(this.chain, null, 4));
     }
 }
 

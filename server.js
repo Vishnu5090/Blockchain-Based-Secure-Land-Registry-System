@@ -14,7 +14,7 @@ const sockets = [];
 const HTTP_PORT = process.env.HTTP_PORT || 3001;
 const P2P_PORT = process.env.P2P_PORT || 6001;
 
-// Connect to peers (manually listed)
+// 🌐 Connect to peers (add the IP addresses of other nodes)
 connectToPeer('ws://192.168.0.102:6002');
 connectToPeer('ws://192.168.0.103:6003');
 connectToPeer('ws://192.168.0.104:6004');
@@ -129,32 +129,46 @@ function connectToPeer(peerUrl) {
 // -------- Express HTTP APIs -------- //
 app.use(bodyParser.json());
 
+// 🏠 Home Route
 app.get('/', (req, res) => {
     res.send('✅ Land Registry Blockchain Server is Running!');
 });
 
-// Get full blockchain
+// 📜 Get the full blockchain
 app.get('/blocks', (req, res) => {
     res.json(blockchain.chain);
 });
 
-// Mine and add a new block
-app.post('/mineBlock', (req, res) => {
+// ➕ Mine a new block with given data
+app.post('/mine', (req, res) => {
     const { data } = req.body;
     if (!data) {
-        return res.status(400).json({ error: 'Missing data field' });
+        return res.status(400).send('Data is required to mine a block.');
     }
     const newBlock = mineBlock(data);
     if (newBlock) {
-        return res.json(newBlock);
+        res.json(newBlock);
+    } else {
+        res.status(500).send('Failed to mine block.');
     }
-    return res.status(500).json({ error: 'Failed to mine block' });
 });
 
-// HTTP server listening
+// 🛜 List all connected peers
+app.get('/peers', (req, res) => {
+    res.json(sockets.map(s => s._socket.remoteAddress + ':' + s._socket.remotePort));
+});
+
+// 🚪 Connect to a new peer manually
+app.post('/addPeer', (req, res) => {
+    const { peerUrl } = req.body;
+    if (!peerUrl) {
+        return res.status(400).send('peerUrl is required.');
+    }
+    connectToPeer(peerUrl);
+    res.send('Trying to connect to peer...');
+});
+
+// 🚀 Start HTTP server
 app.listen(HTTP_PORT, () => {
-    console.log(`🚀 HTTP Server listening on port ${HTTP_PORT}`);
+    console.log(`✅ HTTP Server running on port ${HTTP_PORT}`);
 });
-
-// Log WebSocket server
-console.log(`🔌 P2P WebSocket Server running on port ${P2P_PORT}`);
