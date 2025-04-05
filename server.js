@@ -1,3 +1,5 @@
+// server.js
+
 const WebSocket = require('ws');
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -7,8 +9,10 @@ const app = express();
 const blockchain = new Blockchain();
 const sockets = [];
 
-// Start WebSocket Server (for peer-to-peer)
-const wss = new WebSocket.Server({ port: 6001 });
+const HTTP_PORT = process.env.HTTP_PORT || 3001; // API Server Port
+const P2P_PORT = process.env.P2P_PORT || 6001;    // Peer-to-Peer WebSocket Port
+
+const wss = new WebSocket.Server({ port: P2P_PORT });
 
 wss.on('connection', (ws) => {
     sockets.push(ws);
@@ -30,14 +34,14 @@ wss.on('connection', (ws) => {
     });
 });
 
-// 🔥 Helper: Broadcast a new block to all connected nodes
+// 📢 Broadcast a new block to all connected nodes
 function broadcastBlock(block) {
     sockets.forEach((socket) => {
         socket.send(JSON.stringify({ type: 'NEW_BLOCK', block }));
     });
 }
 
-// 🔥 Helper: Mine and broadcast a new block
+// 🧠 Create a new block
 function mineBlock(data) {
     const newBlock = new Block(
         blockchain.chain.length,
@@ -53,13 +57,14 @@ function mineBlock(data) {
     return null;
 }
 
-// 🔥 Helper: Connect to another peer manually
-function connectToPeer(peer) {
-    const ws = new WebSocket(peer);
+// 🌐 Connect to another peer
+function connectToPeer(peerUrl) {
+    const ws = new WebSocket(peerUrl);
     ws.on('open', () => {
         sockets.push(ws);
-        console.log(`🔗 Connected to new peer: ${peer}`);
+        console.log(`🔗 Connected to peer: ${peerUrl}`);
     });
+
     ws.on('message', (message) => {
         const data = JSON.parse(message);
         console.log('📩 Received from peer:', data);
@@ -74,25 +79,25 @@ function connectToPeer(peer) {
             broadcastBlock(data.block);
         }
     });
+
     ws.on('error', (error) => {
-        console.error(`❌ Failed to connect to peer: ${peer}`, error.message);
+        console.error(`❌ Failed to connect to peer: ${peerUrl}`, error.message);
     });
 }
 
-// API Server (Express)
+// -------- Express APIs -------- //
 app.use(bodyParser.json());
 
-// ✅ Default homepage route
 app.get('/', (req, res) => {
     res.send('✅ Land Registry Blockchain Server is Running!');
 });
 
-// Route: Get all blocks
+// Get blockchain
 app.get('/blocks', (req, res) => {
     res.json(blockchain.chain);
 });
 
-// Route: Mine a new block (simple data)
+// Mine a new block
 app.post('/mineBlock', (req, res) => {
     const { data } = req.body;
     const newBlock = mineBlock(data);
@@ -107,23 +112,19 @@ app.post('/mineBlock', (req, res) => {
     }
 });
 
-// Route: Register land details with duplicate plotId check
+// Register land with duplicate plotId check
 app.post('/register', (req, res) => {
-    const landData = req.body; // { ownerName, plotId, area, location }
-
-    // 🔥 Check for duplicate plotId
+    const landData = req.body;
     if (blockchain.isDuplicateData(landData)) {
         return res.status(400).json({
-            message: `❌ Plot ID ${landData.plotId} already registered! Duplicate entry not allowed.`
+            message: `❌ Plot ID ${landData.plotId} already registered!`
         });
     }
 
-    // ✅ No duplicate found, proceed to mine and broadcast
     const newBlock = mineBlock(landData);
-
     if (newBlock) {
         res.json({
-            message: '✅ Land registered successfully',
+            message: '✅ Land Registered Successfully!',
             block: newBlock
         });
     } else {
@@ -131,13 +132,16 @@ app.post('/register', (req, res) => {
     }
 });
 
-// 🚀 Start Express server
-const HTTP_PORT = process.env.PORT || 3001;
-app.listen(HTTP_PORT, () => {
-    console.log(`🚀 HTTP Server running on http://localhost:${HTTP_PORT}`);
-
-    // 📡 After server starts, connect to known peers
-    connectToPeer('ws://localhost:6002'); 
-    connectToPeer('ws://localhost:6003'); 
-    connectToPeer('ws://localhost:6004');
+// 🧩 Connect to a new peer via API
+app.post('/peers', (req, res) => {
+    const { peer } = req.body; // Example: ws://192.168.1.5:6001
+    connectToPeer(peer);
+    res.json({ message: `Connecting to peer: ${peer}` });
 });
+
+// Start Express server
+app.listen(HTTP_PORT, () => {
+    console.log(`🚀 HTTP Server running on port ${HTTP_PORT}`);
+});
+
+console.log(`🌐 WebSocket P2P Server running on port ${P2P_PORT}`);
