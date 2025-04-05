@@ -131,17 +131,13 @@ app.post('/register', (req, res) => {
     }
 });
 
-// 🔥 NEW: Route to connect to another peer manually
-app.post('/addPeer', (req, res) => {
-    const { peer } = req.body; // Example: { "peer": "ws://localhost:6002" }
-    connectToPeer(peer);
-    res.json({ message: `⏩ Trying to connect to peer: ${peer}` });
-});
+// 🚀 Start Express server
+const HTTP_PORT = process.env.PORT || 3001;
+app.listen(HTTP_PORT, () => {
+    console.log(`🚀 HTTP Server running on http://localhost:${HTTP_PORT}`);
 
-// Start the API Server
-app.listen(3001, () => {
-    console.log('✅ API Server running on http://localhost:3001');
+    // 📡 After server starts, connect to known peers
+    connectToPeer('ws://localhost:6002'); 
+    connectToPeer('ws://localhost:6003'); 
+    connectToPeer('ws://localhost:6004');
 });
-
-// Log blockchain server
-console.log('✅ Blockchain Node WebSocket server running on ws://localhost:6001');
