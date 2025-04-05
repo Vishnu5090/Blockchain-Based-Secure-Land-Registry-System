@@ -29,27 +29,26 @@ class Blockchain {
         return this.chain[this.chain.length - 1];
     }
 
-    isDuplicateData(newData) {
-        // Check if any block already contains same plot_id
-        for (const block of this.chain) {
-            if (block.data.plot_id === newData.plot_id) {
-                console.log(`❌ Duplicate plot_id found: ${newData.plot_id}`);
-                return true;
+    isDuplicateData(data) {
+        return this.chain.some(block => {
+            if (typeof block.data === 'object' && block.data.plotId) {
+                return block.data.plotId === data.plotId;
             }
-        }
-        return false;
+            return false;
+        });
     }
 
     addBlock(newBlock) {
         if (this.isDuplicateData(newBlock.data)) {
             console.log('❌ Block not added due to duplicate data!');
-            return; // Do not add duplicate blocks
+            return false; // <-- better to return a value
         }
 
         newBlock.previousHash = this.getLatestBlock().hash;
         newBlock.hash = newBlock.calculateHash();
         this.chain.push(newBlock);
         console.log('✅ Block added successfully.');
+        return true;
     }
 
     isChainValid() {
