@@ -1,67 +1,96 @@
+const WebSocket = require('ws');
 const express = require('express');
 const bodyParser = require('body-parser');
-const crypto = require('crypto');
-const cors = require('cors');
-const fs = require('fs');
+const { Blockchain, Block } = require('./blockchain');
 
 const app = express();
+const blockchain = new Blockchain();
+const sockets = [];
+
+// Start WebSocket Server (for peer-to-peer)
+const wss = new WebSocket.Server({ port: 6001 });
+
+wss.on('connection', (ws) => {
+    sockets.push(ws);
+    console.log('New node connected');
+
+    ws.on('message', (message) => {
+        const data = JSON.parse(message);
+        console.log('Received:', data);
+
+        if (data.type === 'NEW_BLOCK') {
+            blockchain.addBlock(new Block(
+                data.block.index,
+                data.block.timestamp,
+                data.block.data,
+                data.block.previousHash
+            ));
+            broadcastBlock(data.block);
+        }
+    });
+});
+
+// Broadcast a new block to all connected nodes
+function broadcastBlock(block) {
+    sockets.forEach((socket) => {
+        socket.send(JSON.stringify({ type: 'NEW_BLOCK', block }));
+    });
+}
+
+// API Server (Express)
 app.use(bodyParser.json());
-app.use(cors());
 
-let blockchain = []; // 🧱 Array acting as the blockchain
+// ✅ Default homepage route
+app.get('/', (req, res) => {
+    res.send('✅ Land Registry Blockchain Server is Running!');
+});
 
-// Load blockchain from file if it exists
-const blockchainFile = 'blockchain.json';
-if (fs.existsSync(blockchainFile)) {
-    const fileData = fs.readFileSync(blockchainFile);
-    blockchain = JSON.parse(fileData);
-}
+// Route: Get all blocks
+app.get('/blocks', (req, res) => {
+    res.json(blockchain.chain);
+});
 
-// Hash function
-function hashBlock(block) {
-    const blockString = JSON.stringify(block);
-    return crypto.createHash('sha256').update(blockString).digest('hex');
-}
+// Route: Mine a new block (simple data)
+app.post('/mineBlock', (req, res) => {
+    const { data } = req.body;
+    const newBlock = new Block(
+        blockchain.chain.length,
+        Date.now(),
+        data,
+        blockchain.getLatestBlock().hash
+    );
+    blockchain.addBlock(newBlock);
+    broadcastBlock(newBlock);
+    res.json({
+        message: 'New block mined successfully',
+        block: newBlock
+    });
+});
 
-// Create a block
-function createBlock(data, previousHash = '') {
-    const timestamp = new Date().toISOString();
-    const block = {
-        index: blockchain.length + 1,
-        timestamp,
-        ...data,
-        previousHash,
-    };
-    block.currentHash = hashBlock(block);
-    return block;
-}
-
-// Register Land Title (POST /register)
+// Route: Register land details
 app.post('/register', (req, res) => {
-    const data = req.body;
-    const previousHash = blockchain.length > 0 ? blockchain[blockchain.length - 1].currentHash : '0';
-    const newBlock = createBlock(data, previousHash);
-    blockchain.push(newBlock);
+    const { ownerName, plotId, area, location } = req.body;
+    const landData = { ownerName, plotId, area, location };
 
-    // Save blockchain to file
-    fs.writeFileSync(blockchainFile, JSON.stringify(blockchain, null, 2));
-    res.status(201).json({ message: 'Block added successfully!', block: newBlock });
+    const newBlock = new Block(
+        blockchain.chain.length,
+        Date.now(),
+        landData,
+        blockchain.getLatestBlock().hash
+    );
+    blockchain.addBlock(newBlock);
+    broadcastBlock(newBlock);
+    res.json({
+        message: 'Land registered successfully',
+        block: newBlock
+    });
 });
 
-// Get Transaction History (GET /history/:plotId)
-app.get('/history/:plotId', (req, res) => {
-    const plotId = req.params.plotId;
-    const history = blockchain.filter(block => block.plotId === plotId);
-    res.json(history);
+// Start the API Server
+app.listen(3001, () => {
+    console.log('✅ API Server running on http://localhost:3001');
 });
 
-// Get Full Blockchain (GET /chain)
-app.get('/chain', (req, res) => {
-    res.json(blockchain);
-});
-
-// Start server
-const PORT = 3000;
-app.listen(PORT, () => {
-    console.log(`Blockchain server running at http://localhost:${PORT}`);
-});
+// Log blockchain server
+console.log('✅ Blockchain Node WebSocket server running on ws://localhost:6001');
+    
